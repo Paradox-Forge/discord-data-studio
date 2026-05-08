@@ -1,7 +1,7 @@
 {
   "name": "discord-data-studio",
   "version": "1.0.0",
-  "description": "Oyun süre takip uygulaması",
+  "description": "Discord verilerinizi analiz etmek için kullanabileceğiniz bir araç",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
