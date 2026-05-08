@@ -1,0 +1,93 @@
+{
+  "name": "discord-data-studio",
+  "version": "1.0.0",
+  "description": "Oyun süre takip uygulaması",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:web": "electron-vite build",
+    "build:desktop": "npm run build && electron-builder --win nsis",
+    "build:check": "node scripts/check-build-security.js",
+    "preview": "electron-vite preview",
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "keywords": [],
+  "author": "Burak Behlül",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@tailwindcss/postcss": "^4.2.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.5.0",
+    "axios": "^1.16.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "electron": "^42.0.0",
+    "electron-builder": "24.13.3",
+    "electron-vite": "^5.0.0",
+    "lucide-react": "^1.14.0",
+    "postcss": "^8.5.14",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.4",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.3",
+    "zustand": "^5.0.13"
+  },
+  "build": {
+    "appId": "com.discordatastudio.app",
+    "productName": "Discord Data Studio",
+    "icon": "public/icon.ico",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "burakbehlull",
+        "repo": "discord-data-studio"
+      }
+    ],
+    "files": [
+      "out/**/*",
+      "src/main/**/*",
+      "src/preload/**/*",
+      "src/renderer/**/*",
+      "public/**/*",
+      "package.json",
+      "!**/*.map",
+      "!**/.env",
+      "!**/.env.*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": []
+    },
+    "linux": {
+      "target": []
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": true
+    }
+  }
+}
