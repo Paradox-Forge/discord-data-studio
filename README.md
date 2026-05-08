@@ -1,31 +1,67 @@
-# Discord Message Manager (Desktop)
+# 📊 Discord Data Studio
 
-A powerful desktop application for managing your Discord Direct Messages.
+![Discord Data Studio Banner](discord_data_studio_banner_1778274731146.png)
 
-## Features
+Discord verilerinizi analiz etmek, yedeklemek ve yönetmek için tasarlanmış, güçlü ve modern bir masaüstü uygulamasıdır.
 
-- **DM List Panel**: View and search all your DM conversations.
-- **Message Viewer**: Infinite scroll, image previews, and detailed metadata.
-- **Advanced Filtering**: Filter by keyword, date range, or attachments.
-- **Bulk Delete**: Safely delete messages with rate limit handling.
-- **Export/Archive**: Save conversations to JSON and reload them for offline viewing.
-- **Attachment Downloader**: Bulk download images and files from any conversation.
+## ✨ Özellikler
 
-## Tech Stack
+- 🔍 **Gelişmiş Veri İndeksleme**: Tüm DM geçmişinizi ve mesaj verilerinizi hızlıca tarayın ve indeksleyin.
+- 📂 **Arşivleme ve Yedekleme**: Mesajlarınızı yerel olarak güvenli bir şekilde saklayın ve istediğiniz zaman çevrimdışı görüntüleyin.
+- 📥 **Dosya Yöneticisi**: Tüm ekleri (resim, video, dosya) toplu olarak indirme özelliği.
+- 🧹 **Toplu İşlemler**: Mesajları toplu silme, dışa aktarma (JSON/CSV) ve düzenleme.
+- 📈 **Veri Analizi**: Mesajlaşma istatistiklerinizi ve etkileşim grafiklerinizi inceleyin.
+- 🎨 **Modern Arayüz**: Karanlık mod odaklı, hızlı ve kullanıcı dostu React tabanlı arayüz.
 
-- **Electron**: Desktop foundation.
-- **React + Vite**: Fast frontend.
-- **Tailwind CSS**: Modern styling.
-- **Zustand**: Clean state management.
-- **Axios**: API interactions.
+## 🚀 Başlangıç
 
-## Security Warning
+Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyin.
 
-This application requires your Discord User Token. Using this tool may violate Discord's Terms of Service. Use at your own risk. Your token is only stored in memory during the session and is never persisted to disk.
+### Gereksinimler
 
-## Development
+- [Node.js](https://nodejs.org/) (v20 veya üzeri önerilir)
+- npm veya yarn
 
+### Kurulum
+
+1. Depoyu klonlayın:
+   ```bash
+   git clone https://github.com/Paradox-Forge/discord-data-studio.git
+   ```
+2. Proje dizinine gidin:
+   ```bash
+   cd discord-data-studio
+   ```
+3. Bağımlılıkları yükleyin:
+   ```bash
+   npm install
+   ```
+
+### Kullanım
+
+Geliştirme modunda başlatmak için:
 ```bash
-npm install
 npm run dev
 ```
+
+Uygulamayı paketlemek (Build) için:
+```bash
+npm run build:desktop
+```
+
+## 🛠️ Teknoloji Yığını
+
+- **Framework**: [Electron](https://www.electronjs.org/)
+- **Frontend**: [React](https://reactjs.org/) + [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+- **Networking**: [Axios](https://axios-http.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+
+## ⚠️ Güvenlik Uyarısı
+
+Bu uygulama Discord Kullanıcı Token'ınızı (User Token) kullanır. Bu tür araçların kullanımı Discord Hizmet Koşulları'nı (ToS) ihlal edebilir. Tüm sorumluluk kullanıcıya aittir. Token'ınız yalnızca oturum süresince bellekte tutulur ve asla sunucularımıza gönderilmez veya diske kaydedilmez.
+
+## 📄 Lisans
+
+Bu proje **Apache License 2.0** ile lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına göz atabilirsiniz.
