@@ -18,8 +18,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bufferutil": "^4.1.0",
     "electron-log": "^5.4.3",
-    "electron-updater": "^6.6.2"
+    "electron-updater": "^6.6.2",
+    "utf-8-validate": "^6.0.6"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -27,6 +29,7 @@
     "@tailwindcss/postcss": "^4.2.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.5.0",
     "axios": "^1.16.0",
@@ -44,6 +47,7 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^6.0.3",
     "vite": "^7.3.3",
+    "ws": "^8.20.0",
     "zustand": "^5.0.13"
   },
   "build": {

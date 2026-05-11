@@ -6,8 +6,16 @@ import fs from 'fs'
 import path from 'path'
 import axios from 'axios'
 
+// Custom Modules
+import { configManager } from './modules/configManager'
+import { TrayManager } from './modules/trayManager'
+import { discordWatcher } from './modules/discordWatcher'
+
+let mainWindow: BrowserWindow
+let trayManager: TrayManager
+
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
@@ -38,15 +46,69 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  // Initialize Tray
+  trayManager = new TrayManager(mainWindow)
 }
 
 app.whenReady().then(() => {
+  electronApp.setAppUserModelId('com.discordatastudio.app')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC Handlers
+  ipcMain.handle('get-all-logs', async () => {
+    console.log('Main: Scanning archives for deleted messages...')
+    const archivesPath = path.join(app.getPath('userData'), 'archives')
+    if (!fs.existsSync(archivesPath)) return []
+
+    const allMessages: any[] = []
+    const scanDir = (dir: string) => {
+      const items = fs.readdirSync(dir)
+      for (const item of items) {
+        const fullPath = path.join(dir, item)
+        if (fs.statSync(fullPath).isDirectory()) {
+          scanDir(fullPath)
+        } else if (item.endsWith('.json')) {
+          try {
+            const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'))
+            if (Array.isArray(data)) {
+              allMessages.push(...data)
+            }
+          } catch (e) {
+            console.error('Error reading log:', fullPath)
+          }
+        }
+      }
+    }
+
+    scanDir(archivesPath)
+    return allMessages
+  })
+
+  ipcMain.handle('get-config', () => configManager.getConfig())
+  
+  ipcMain.handle('update-config', (_, newConfig) => {
+    configManager.saveConfig(newConfig)
+    return true
+  })
+
+  ipcMain.handle('start-watcher', (_, token) => {
+    console.log('IPC: start-watcher received')
+    discordWatcher.start(token)
+    
+    // Notify user that watcher is active
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Watcher Active',
+      message: 'Discord Real-time Watcher has started. All deletions will be captured while the app is open.',
+      buttons: ['OK']
+    })
+    
+    return true
+  })
+
   ipcMain.handle('select-directory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openDirectory'],
@@ -122,6 +184,20 @@ app.whenReady().then(() => {
     return null
   })
 
+  ipcMain.handle('toggle-devtools', () => {
+    console.log('Main: Toggle DevTools requested')
+    const win = BrowserWindow.getFocusedWindow() || mainWindow
+    if (win) {
+      win.webContents.toggleDevTools()
+    }
+    return true
+  })
+
+  ipcMain.handle('sync-channel-cache', async (_, channelId) => {
+    await discordWatcher.fetchChannelHistory(channelId)
+    return true
+  })
+
   createWindow()
 
   app.on('activate', function () {
@@ -131,6 +207,9 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit()
+    // Check if tray is disabled, then quit
+    if (!configManager.getConfig().isTrayEnabled) {
+      app.quit()
+    }
   }
 })

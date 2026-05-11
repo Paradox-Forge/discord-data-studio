@@ -150,12 +150,21 @@ const FilterPanel: React.FC = () => {
   }
 
   const handleDelete = async () => {
-    if (!token || !selectedChannelId || filteredMessages.length === 0) return
+    const { currentUserId } = useStore.getState()
+    if (!token || !selectedChannelId || filteredMessages.length === 0 || !currentUserId) return
     
-    const limit = parseInt(deleteCount) || filteredMessages.length
-    const targets = filteredMessages.slice(0, limit)
+    // SAFETY: Only target your OWN messages in DMs
+    const ownMessages = filteredMessages.filter(m => m.author.id === currentUserId)
     
-    const confirmed = confirm(`Are you sure you want to delete ${targets.length} messages? This cannot be undone.`)
+    if (ownMessages.length === 0) {
+      alert('No deletable messages found. (In DMs, you can only delete your own messages)')
+      return
+    }
+
+    const limit = parseInt(deleteCount) || ownMessages.length
+    const targets = ownMessages.slice(0, limit)
+    
+    const confirmed = confirm(`Found ${ownMessages.length} of your messages. Are you sure you want to delete ${targets.length} of them?`)
     if (!confirmed) return
 
     setIsProcessing(true)
@@ -164,11 +173,17 @@ const FilterPanel: React.FC = () => {
       await bulkDeleteMessages(token, selectedChannelId, targets.map(m => m.id), (count) => {
         setProgress(Math.round((count / targets.length) * 100))
       })
-      alert('Deletion complete!')
+      
+      // Update local state by removing deleted messages
+      const deletedIds = new Set(targets.map(m => m.id))
+      setMessages(messages.filter(m => !deletedIds.has(m.id)))
+      
+      alert(`Successfully deleted ${targets.length} messages!`)
     } catch (err) {
-      alert('An error occurred during deletion.')
+      alert('An error occurred during deletion. Check DevTools for details.')
     } finally {
       setIsProcessing(false)
+      setProgress(0)
     }
   }
 

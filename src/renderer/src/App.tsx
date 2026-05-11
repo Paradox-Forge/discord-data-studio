@@ -3,6 +3,7 @@ import { useStore } from './store/useStore'
 import { discordApi } from './services/discordApi'
 import Sidebar from './components/Sidebar'
 import MessageViewer from './components/MessageViewer'
+import DeletedMessagesModal from './components/DeletedMessagesModal'
 import FilterPanel from './components/FilterPanel'
 import { AlertTriangle, Lock, LogOut } from 'lucide-react'
 import { cn } from './lib/utils'
@@ -17,10 +18,21 @@ const App: React.FC = () => {
     setIsVerifying(true)
     setError(null)
     try {
-      await discordApi.getUserMe(inputToken)
+      const user = await discordApi.getUserMe(inputToken)
+      console.log('Login successful:', user.username)
+      
+      const { setToken, setChannels, setCurrentUserId } = useStore.getState()
       setToken(inputToken)
+      setCurrentUserId(user.id)
       const channels = await discordApi.getChannels(inputToken)
       setChannels(channels)
+      
+      // Save user ID to config so watcher knows where to save logs
+      await window.api.updateConfig({ lastUserId: user.id })
+      
+      // Start Watcher
+      console.log('Starting Discord Watcher...')
+      window.api.startWatcher(inputToken)
     } catch (err: any) {
       setError(err.response?.status === 401 ? 'Invalid Discord Token' : 'Failed to connect to Discord')
     } finally {
@@ -121,6 +133,9 @@ const App: React.FC = () => {
 
       {/* Right Panel - Filters & Actions */}
       <FilterPanel />
+
+      {/* Modals */}
+      <DeletedMessagesModal />
     </div>
   )
 }
