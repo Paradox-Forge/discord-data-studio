@@ -7,10 +7,11 @@ Discord verilerinizi analiz etmek, yedeklemek ve yönetmek için tasarlanmış, 
 ## ✨ Özellikler
 
 - 🔍 **Gelişmiş Veri İndeksleme**: Tüm DM geçmişinizi ve mesaj verilerinizi hızlıca tarayın ve indeksleyin.
+- 🕵️ **Dedektif Modu (Deleted Message Watcher)**: Karşı tarafın sildiği mesajları anında yakalar ve yerel kasanıza (Vault) kaydeder.
+- 📸 **Medya Pusu Sistemi**: Silinen mesajlardaki resim ve videoları silinmeden önce otomatik olarak indirir ve yedekler.
+- 🧹 **Güvenli Toplu Silme (Purge)**: DM'lerde sadece kendi mesajlarınızı akıllı filtreleme ile saniyeler içinde temizleyin.
 - 📂 **Arşivleme ve Yedekleme**: Mesajlarınızı yerel olarak güvenli bir şekilde saklayın ve istediğiniz zaman çevrimdışı görüntüleyin.
-- 📥 **Dosya Yöneticisi**: Tüm ekleri (resim, video, dosya) toplu olarak indirme özelliği.
-- 🧹 **Toplu İşlemler**: Mesajları toplu silme, dışa aktarma (JSON/CSV) ve düzenleme.
-- 📈 **Veri Analizi**: Mesajlaşma istatistiklerinizi ve etkileşim grafiklerinizi inceleyin.
+- 🛡️ **Anti-Ban Kalkanı**: Discord API limitlerine takılmamak için insan taklidi yapan (jitter) gecikmeler ve cooldown sistemi.
 - 🎨 **Modern Arayüz**: Karanlık mod odaklı, hızlı ve kullanıcı dostu React tabanlı arayüz.
 
 ## 🚀 Başlangıç

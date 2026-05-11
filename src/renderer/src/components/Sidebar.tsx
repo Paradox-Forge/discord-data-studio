@@ -181,13 +181,15 @@ const Sidebar: React.FC = () => {
       </div>
 
       <div className="p-4 border-t border-border mt-auto">
-        <button 
-          onClick={() => window.api.toggleDevTools()}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-all text-xs font-mono border border-dashed border-border hover:border-primary/50"
-        >
-          <Terminal className="w-4 h-4" />
-          <span>Open DevTools</span>
-        </button>
+        {import.meta.env.DEV && (
+          <button 
+            onClick={() => window.api.toggleDevTools()}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-all text-xs font-mono border border-dashed border-border hover:border-primary/50"
+          >
+            <Terminal className="w-4 h-4" />
+            <span>Open DevTools</span>
+          </button>
+        )}
       </div>
     </aside>
   )
