@@ -1,6 +1,6 @@
 {
   "name": "discord-data-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Discord verilerinizi analiz etmek için kullanabileceğiniz bir araç",
   "main": "./out/main/index.js",
   "scripts": {
