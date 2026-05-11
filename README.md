@@ -14,6 +14,24 @@ Discord verilerinizi analiz etmek, yedeklemek ve yönetmek için tasarlanmış, 
 - 🛡️ **Anti-Ban Kalkanı**: Discord API limitlerine takılmamak için insan taklidi yapan (jitter) gecikmeler ve cooldown sistemi.
 - 🎨 **Modern Arayüz**: Karanlık mod odaklı, hızlı ve kullanıcı dostu React tabanlı arayüz.
 
+## Dashboard Page
+
+The dashboard is where everything is; DM viewing, JSON uploading, it's all there.
+
+![Dashboard Page](public/dashboard_page.png)
+
+## Login Page
+
+The login screen is the first screen where you will log in with your token.
+
+![Login Page](public/login_page.png)
+
+## Deleted History Page
+
+This is where you can view messages, pictures, and videos that the person on the other end of the profile has deleted.
+
+![Deleted History Page](public/deleted_history_page.png)
+
 ## 🚀 Başlangıç
 
 Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyin.
@@ -41,11 +59,13 @@ Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyin.
 ### Kullanım
 
 Geliştirme modunda başlatmak için:
+
 ```bash
 npm run dev
 ```
 
 Uygulamayı paketlemek (Build) için:
+
 ```bash
 npm run build:desktop
 ```
