@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import log from 'electron-log'
 
 import fs from 'fs'
 import path from 'path'
@@ -10,6 +11,7 @@ import axios from 'axios'
 import { configManager } from './modules/configManager'
 import { TrayManager } from './modules/trayManager'
 import { discordWatcher } from './modules/discordWatcher'
+import { userTracker } from './modules/userTracker'
 
 let mainWindow: BrowserWindow
 let trayManager: TrayManager
@@ -96,7 +98,19 @@ app.whenReady().then(() => {
 
   ipcMain.handle('start-watcher', (_, token) => {
     console.log('IPC: start-watcher received')
-    discordWatcher.start(token)
+    
+    // Save token to config for later use
+    configManager.saveConfig({ discordToken: token })
+    
+    const config = configManager.getConfig()
+    
+    // Start message watcher if enabled
+    if (config.trackDeletedMessages) {
+      discordWatcher.start(token)
+    }
+    
+    // Start user tracker
+    userTracker.start(token)
     
     // Notify user that watcher is active
     dialog.showMessageBox({
@@ -107,6 +121,76 @@ app.whenReady().then(() => {
     })
     
     return true
+  })
+
+  ipcMain.handle('add-tracked-user', async (_, user) => {
+    const config = configManager.getConfig()
+    const trackedUsers = config.trackedUsers || []
+    
+    // Check if user already exists
+    if (trackedUsers.find(u => u.userId === user.userId)) {
+      return { success: false, error: 'User already tracked' }
+    }
+    
+    trackedUsers.push(user)
+    configManager.saveConfig({ trackedUsers })
+    
+    // Immediately fetch and cache the user's current state
+    log.info(`[Main] New user added, fetching initial state for ${user.username}`)
+    const token = config.discordToken
+    if (token) {
+      const userInfo = await userTracker.fetchUserInfo(user.userId, token)
+      if (userInfo) {
+        // Manually set the cache so next check will compare against this
+        userTracker['userCache'].set(user.userId, userInfo)
+        log.info(`[Main] Initial state cached for ${user.username}`)
+      }
+    }
+    
+    return { success: true }
+  })
+
+  ipcMain.handle('remove-tracked-user', (_, userId) => {
+    const config = configManager.getConfig()
+    const trackedUsers = (config.trackedUsers || []).filter(u => u.userId !== userId)
+    configManager.saveConfig({ trackedUsers })
+    return { success: true }
+  })
+
+  ipcMain.handle('get-user-change-logs', () => {
+    return userTracker.getAllLogs()
+  })
+
+  ipcMain.handle('fetch-user-info', async (_, { userId, token }) => {
+    log.info(`IPC: fetch-user-info called for userId: ${userId}`)
+    
+    if (!token) {
+      log.error('fetch-user-info: No token provided')
+      return null
+    }
+    
+    return await userTracker.fetchUserInfo(userId, token)
+  })
+
+  ipcMain.handle('force-check-users', async () => {
+    log.info('[Main] Force check requested')
+    const config = configManager.getConfig()
+    const token = config.discordToken
+    
+    if (!token) {
+      log.error('[Main] No token available for force check')
+      return { success: false, error: 'No token' }
+    }
+    
+    // Temporarily set token if not set
+    if (!userTracker['token']) {
+      userTracker['token'] = token
+    }
+    
+    // Force check all users
+    await userTracker['checkAllUsers']()
+    
+    return { success: true }
   })
 
   ipcMain.handle('select-directory', async () => {

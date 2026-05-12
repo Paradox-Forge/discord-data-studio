@@ -8,7 +8,7 @@ interface AppState {
   messages: DiscordMessage[]
   isLoading: boolean
   isArchiveView: boolean
-  view: 'messages' | 'deleted'
+  view: 'messages' | 'deleted' | 'settings' | 'userTracking'
   isDeletedModalOpen: boolean
   error: string | null
   currentUserId: string | null
@@ -21,7 +21,7 @@ interface AppState {
   addMessages: (messages: DiscordMessage[]) => void
   setLoading: (loading: boolean) => void
   setArchiveView: (isArchive: boolean) => void
-  setView: (view: 'messages' | 'deleted') => void
+  setView: (view: 'messages' | 'deleted' | 'settings' | 'userTracking') => void
   setDeletedModalOpen: (isOpen: boolean) => void
   setError: (error: string | null) => void
   setCurrentUserId: (id: string | null) => void
@@ -60,5 +60,9 @@ export const useStore = create<AppState>((set) => ({
   setDeletedModalOpen: (isOpen) => set({ isDeletedModalOpen: isOpen }),
   setError: (error) => set({ error }),
   setCurrentUserId: (id) => set({ currentUserId: id }),
-  reset: () => set({ token: null, channels: [], selectedChannelId: null, messages: [], error: null, isArchiveView: false, view: 'messages', isDeletedModalOpen: false, currentUserId: null })
+  reset: () => {
+    // Clear token from config on logout
+    window.api.updateConfig({ discordToken: null })
+    set({ token: null, channels: [], selectedChannelId: null, messages: [], error: null, isArchiveView: false, view: 'messages', isDeletedModalOpen: false, currentUserId: null })
+  }
 }))

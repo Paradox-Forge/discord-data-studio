@@ -15,12 +15,21 @@ interface DeletedMessage {
   channel_id: string
   deleted?: boolean
   updated?: boolean
+  attachments?: any[]
+}
+
+interface ChannelInfo {
+  name: string
+  type: 'dm' | 'group' | 'guild'
+  guildName?: string
+  recipientName?: string
 }
 
 const DeletedMessagesModal: React.FC = () => {
-  const { isDeletedModalOpen, setDeletedModalOpen } = useStore()
+  const { isDeletedModalOpen, setDeletedModalOpen, channels, token } = useStore()
   const [messages, setMessages] = useState<DeletedMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [channelInfoCache, setChannelInfoCache] = useState<Map<string, ChannelInfo>>(new Map())
 
   const loadDeletedMessages = async () => {
     setLoading(true)
@@ -30,10 +39,156 @@ const DeletedMessagesModal: React.FC = () => {
         .filter((msg: any) => msg.deleted)
         .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       setMessages(deleted)
+      
+      // Load channel info for all unique channel IDs
+      const uniqueChannelIds = [...new Set(deleted.map((msg: any) => msg.channel_id))]
+      await loadChannelInfo(uniqueChannelIds)
     } catch (err) {
       console.error('Failed to load deleted messages:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadChannelInfo = async (channelIds: string[]) => {
+    if (!token) return
+
+    const newCache = new Map(channelInfoCache)
+
+    for (const channelId of channelIds) {
+      // Skip if already cached
+      if (newCache.has(channelId)) continue
+
+      try {
+        // First check if we have this channel in our channels list
+        const existingChannel = channels.find(c => c.id === channelId)
+        
+        if (existingChannel) {
+          // We have the channel info
+          if (existingChannel.type === 1) {
+            // DM
+            const recipient = existingChannel.recipients?.[0]
+            newCache.set(channelId, {
+              name: recipient?.username || 'Unknown User',
+              type: 'dm',
+              recipientName: recipient?.username
+            })
+          } else if (existingChannel.type === 3) {
+            // Group DM
+            const recipientNames = existingChannel.recipients?.map(r => r.username).join(', ') || 'Group'
+            newCache.set(channelId, {
+              name: existingChannel.name || recipientNames,
+              type: 'group',
+              recipientName: recipientNames
+            })
+          } else {
+            // Guild channel
+            newCache.set(channelId, {
+              name: existingChannel.name || 'Unknown Channel',
+              type: 'guild',
+              guildName: 'Server'
+            })
+          }
+        } else {
+          // Try to fetch channel info from API
+          const response = await fetch(`https://discord.com/api/v9/channels/${channelId}`, {
+            headers: { Authorization: token }
+          })
+
+          if (response.ok) {
+            const channelData = await response.json()
+            
+            if (channelData.type === 1) {
+              // DM
+              const recipient = channelData.recipients?.[0]
+              newCache.set(channelId, {
+                name: recipient?.username || 'Unknown User',
+                type: 'dm',
+                recipientName: recipient?.username
+              })
+            } else if (channelData.type === 3) {
+              // Group DM
+              const recipientNames = channelData.recipients?.map((r: any) => r.username).join(', ') || 'Group'
+              newCache.set(channelId, {
+                name: channelData.name || recipientNames,
+                type: 'group',
+                recipientName: recipientNames
+              })
+            } else {
+              // Guild channel - fetch guild info
+              if (channelData.guild_id) {
+                try {
+                  const guildResponse = await fetch(`https://discord.com/api/v9/guilds/${channelData.guild_id}`, {
+                    headers: { Authorization: token }
+                  })
+                  if (guildResponse.ok) {
+                    const guildData = await guildResponse.json()
+                    newCache.set(channelId, {
+                      name: channelData.name || 'Unknown Channel',
+                      type: 'guild',
+                      guildName: guildData.name
+                    })
+                  } else {
+                    newCache.set(channelId, {
+                      name: channelData.name || 'Unknown Channel',
+                      type: 'guild',
+                      guildName: 'Server'
+                    })
+                  }
+                } catch {
+                  newCache.set(channelId, {
+                    name: channelData.name || 'Unknown Channel',
+                    type: 'guild',
+                    guildName: 'Server'
+                  })
+                }
+              }
+            }
+          } else {
+            // Fallback
+            newCache.set(channelId, {
+              name: 'Unknown Channel',
+              type: 'dm'
+            })
+          }
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100))
+      } catch (err) {
+        console.error(`Failed to load channel info for ${channelId}:`, err)
+        newCache.set(channelId, {
+          name: 'Unknown Channel',
+          type: 'dm'
+        })
+      }
+    }
+
+    setChannelInfoCache(newCache)
+  }
+
+  const getChannelDisplayName = (channelId: string): { primary: string; secondary?: string } => {
+    const info = channelInfoCache.get(channelId)
+    
+    if (!info) {
+      return { primary: channelId }
+    }
+
+    if (info.type === 'dm') {
+      return { 
+        primary: info.recipientName || info.name,
+        secondary: 'Direct Message'
+      }
+    } else if (info.type === 'group') {
+      return {
+        primary: info.name,
+        secondary: info.recipientName
+      }
+    } else {
+      return {
+        primary: info.name,
+        secondary: info.guildName
+      }
     }
   }
 
@@ -114,9 +269,26 @@ const DeletedMessagesModal: React.FC = () => {
                             <Clock className="w-3.5 h-3.5" />
                             {format(new Date(msg.timestamp), 'MMM d, HH:mm:ss')}
                           </span>
-                          <span className="flex items-center gap-1 opacity-50">
+                          <span className="flex items-center gap-1">
                             <Hash className="w-3.5 h-3.5" />
-                            {msg.channel_id}
+                            <div className="flex flex-col">
+                              {channelInfoCache.has(msg.channel_id) ? (
+                                <>
+                                  <span className="font-semibold text-foreground">
+                                    {getChannelDisplayName(msg.channel_id).primary}
+                                  </span>
+                                  {getChannelDisplayName(msg.channel_id).secondary && (
+                                    <span className="text-[10px] opacity-60">
+                                      {getChannelDisplayName(msg.channel_id).secondary}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[10px] opacity-40 animate-pulse">
+                                  Loading channel info...
+                                </span>
+                              )}
+                            </div>
                           </span>
                         </div>
                       </div>
@@ -158,7 +330,7 @@ const DeletedMessagesModal: React.FC = () => {
                               rel="noreferrer"
                               className="absolute top-2 right-2 p-2 bg-black/60 backdrop-blur-md rounded-full opacity-0 group-hover/att:opacity-100 transition-opacity hover:bg-primary"
                             >
-                              <X className="w-4 h-4 rotate-45" /> {/* Download icon alternative */}
+                              <X className="w-4 h-4 rotate-45" />
                             </a>
                           </div>
                         )

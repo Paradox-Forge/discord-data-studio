@@ -214,7 +214,10 @@ export class DiscordWatcher {
   }
 
   private handleMessageCreate(msg: DiscordMessage): void {
-    const userId = configManager.getConfig().lastUserId || 'unknown'
+    const config = configManager.getConfig()
+    if (!config.trackDeletedMessages) return // Skip if tracking is disabled
+    
+    const userId = config.lastUserId || 'unknown'
     const logPath = this.getLogPath(userId, msg.channel_id)
     
     let logs: DiscordMessage[] = []
@@ -233,7 +236,10 @@ export class DiscordWatcher {
   }
 
   private handleMessageDelete(data: { id: string, channel_id: string }): void {
-    const userId = configManager.getConfig().lastUserId || 'unknown'
+    const config = configManager.getConfig()
+    if (!config.trackDeletedMessages) return // Skip if tracking is disabled
+    
+    const userId = config.lastUserId || 'unknown'
     const channelDir = path.join(this.archivesPath, userId, data.channel_id)
     
     if (!fs.existsSync(channelDir)) return

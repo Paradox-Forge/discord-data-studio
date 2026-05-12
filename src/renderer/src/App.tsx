@@ -5,11 +5,13 @@ import Sidebar from './components/Sidebar'
 import MessageViewer from './components/MessageViewer'
 import DeletedMessagesModal from './components/DeletedMessagesModal'
 import FilterPanel from './components/FilterPanel'
+import SettingsModal from './components/SettingsModal'
+import UserTrackingPanel from './components/UserTrackingPanel'
 import { AlertTriangle, Lock, LogOut } from 'lucide-react'
 import { cn } from './lib/utils'
 
 const App: React.FC = () => {
-  const { token, setToken, setChannels, setError, error, reset, isArchiveView, selectedChannelId } = useStore()
+  const { token, setToken, setChannels, setError, error, reset, isArchiveView, selectedChannelId, view, setView } = useStore()
   const [inputToken, setInputToken] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
 
@@ -96,45 +98,60 @@ const App: React.FC = () => {
     )
   }
 
+  // Render based on view
+  const renderMainContent = () => {
+    if (view === 'settings') {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <SettingsModal isOpen={true} onClose={() => setView('messages')} />
+        </div>
+      )
+    }
+
+    if (view === 'userTracking') {
+      return <UserTrackingPanel />
+    }
+
+    // Default: messages view
+    return (
+      <>
+        <main className="flex-1 flex flex-col border-r border-border min-w-0">
+          <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-card/50 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <h2 className="font-semibold truncate">Messages</h2>
+              {isArchiveView && (
+                <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] font-bold rounded border border-purple-500/20 uppercase tracking-widest">
+                  Archive Mode
+                </span>
+              )}
+              {!isArchiveView && selectedChannelId && (
+                <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded border border-primary/20 uppercase tracking-widest flex items-center gap-1">
+                  <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                  Live Index
+                </span>
+              )}
+            </div>
+            <button 
+              onClick={reset}
+              className="p-2 hover:bg-secondary rounded-full transition-colors text-muted-foreground hover:text-foreground"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </header>
+          <div className="flex-1 overflow-hidden">
+            <MessageViewer />
+          </div>
+        </main>
+        <FilterPanel />
+      </>
+    )
+  }
+
   return (
     <div className="flex h-screen bg-background overflow-hidden animate-in fade-in duration-500">
-      {/* Sidebar */}
       <Sidebar />
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col border-r border-border min-w-0">
-        <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-card/50 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <h2 className="font-semibold truncate">Messages</h2>
-            {isArchiveView && (
-              <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] font-bold rounded border border-purple-500/20 uppercase tracking-widest">
-                Archive Mode
-              </span>
-            )}
-            {!isArchiveView && selectedChannelId && (
-              <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded border border-primary/20 uppercase tracking-widest flex items-center gap-1">
-                <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
-                Live Index
-              </span>
-            )}
-          </div>
-          <button 
-            onClick={reset}
-            className="p-2 hover:bg-secondary rounded-full transition-colors text-muted-foreground hover:text-foreground"
-            title="Logout"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
-        </header>
-        <div className="flex-1 overflow-hidden">
-          <MessageViewer />
-        </div>
-      </main>
-
-      {/* Right Panel - Filters & Actions */}
-      <FilterPanel />
-
-      {/* Modals */}
+      {renderMainContent()}
       <DeletedMessagesModal />
     </div>
   )

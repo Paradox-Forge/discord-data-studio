@@ -1,17 +1,22 @@
 import { app } from 'electron'
 import fs from 'fs'
 import path from 'path'
+import { TrackedUser } from '@shared/types'
 
 export interface AppConfig {
   isTrayEnabled: boolean
   isLoggingEnabled: boolean
   discordToken?: string
   lastUserId?: string
+  trackDeletedMessages: boolean
+  trackedUsers: TrackedUser[]
 }
 
 const defaultConfig: AppConfig = {
   isTrayEnabled: true,
-  isLoggingEnabled: true
+  isLoggingEnabled: true,
+  trackDeletedMessages: true,
+  trackedUsers: []
 }
 
 export class ConfigManager {

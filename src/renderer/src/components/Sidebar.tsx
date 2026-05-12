@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { useStore } from '../store/useStore'
-import { Search, User, Trash2, Terminal } from 'lucide-react'
+import { Search, User, Trash2, Terminal, Settings as SettingsIcon, Eye } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 const Sidebar: React.FC = () => {
-  const { channels, selectedChannelId, setSelectedChannelId, token, addChannel } = useStore()
+  const { channels, selectedChannelId, setSelectedChannelId, token, addChannel, view, setView } = useStore()
   const [search, setSearch] = useState('')
   const [manualId, setManualId] = useState('')
   const [targetUserId, setTargetUserId] = useState('')
@@ -69,22 +69,52 @@ const Sidebar: React.FC = () => {
         </div>
 
         {/* Global Navigation */}
-        <button 
-          onClick={() => {
-            setSelectedChannelId(null)
-            useStore.getState().setDeletedModalOpen(true)
-          }}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left font-bold text-sm border",
-            useStore.getState().isDeletedModalOpen 
-              ? "bg-destructive text-destructive-foreground border-destructive/50 shadow-lg shadow-destructive/20" 
-              : "bg-secondary/50 border-border hover:border-primary/50"
-          )}
-        >
-          <Trash2 className="w-5 h-5" />
-          <span>Deleted Vault</span>
-          {useStore.getState().isDeletedModalOpen && <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse" />}
-        </button>
+        <div className="space-y-2">
+          <button 
+            onClick={() => {
+              setSelectedChannelId(null)
+              useStore.getState().setDeletedModalOpen(true)
+            }}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left font-bold text-sm border",
+              useStore.getState().isDeletedModalOpen 
+                ? "bg-destructive text-destructive-foreground border-destructive/50 shadow-lg shadow-destructive/20" 
+                : "bg-secondary/50 border-border hover:border-primary/50"
+            )}
+          >
+            <Trash2 className="w-5 h-5" />
+            <span>Deleted Vault</span>
+            {useStore.getState().isDeletedModalOpen && <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse" />}
+          </button>
+
+          <button 
+            onClick={() => setView('userTracking')}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left font-bold text-sm border",
+              view === 'userTracking'
+                ? "bg-primary text-primary-foreground border-primary/50 shadow-lg shadow-primary/20" 
+                : "bg-secondary/50 border-border hover:border-primary/50"
+            )}
+          >
+            <Eye className="w-5 h-5" />
+            <span>Kullanıcı İzleme</span>
+            {view === 'userTracking' && <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse" />}
+          </button>
+
+          <button 
+            onClick={() => setView('settings')}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left font-bold text-sm border",
+              view === 'settings'
+                ? "bg-primary text-primary-foreground border-primary/50 shadow-lg shadow-primary/20" 
+                : "bg-secondary/50 border-border hover:border-primary/50"
+            )}
+          >
+            <SettingsIcon className="w-5 h-5" />
+            <span>Ayarlar</span>
+            {view === 'settings' && <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse" />}
+          </button>
+        </div>
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
