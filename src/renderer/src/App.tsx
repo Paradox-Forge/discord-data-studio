@@ -3,17 +3,20 @@ import { useStore } from './store/useStore'
 import { discordApi } from './services/discordApi'
 import Sidebar from './components/Sidebar'
 import MessageViewer from './components/MessageViewer'
-import DeletedMessagesModal from './components/DeletedMessagesModal'
 import FilterPanel from './components/FilterPanel'
-import SettingsModal from './components/SettingsModal'
-import UserTrackingPanel from './components/UserTrackingPanel'
-import { AlertTriangle, Lock, LogOut } from 'lucide-react'
+import { AlertTriangle, Lock, LogOut, Loader2 } from 'lucide-react'
 import { cn } from './lib/utils'
+
+// Lazy load heavy components
+const DeletedMessagesModal = React.lazy(() => import('./components/DeletedMessagesModal'))
+const SettingsModal = React.lazy(() => import('./components/SettingsModal'))
+const UserTrackingPanel = React.lazy(() => import('./components/UserTrackingPanel'))
 
 const App: React.FC = () => {
   const { token, setToken, setChannels, setError, error, reset, isArchiveView, selectedChannelId, view, setView } = useStore()
   const [inputToken, setInputToken] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
+  const [isLoadingChannels, setIsLoadingChannels] = useState(false)
 
   const handleLogin = async () => {
     if (!inputToken) return
@@ -26,8 +29,6 @@ const App: React.FC = () => {
       const { setToken, setChannels, setCurrentUserId } = useStore.getState()
       setToken(inputToken)
       setCurrentUserId(user.id)
-      const channels = await discordApi.getChannels(inputToken)
-      setChannels(channels)
       
       // Save user ID to config so watcher knows where to save logs
       await window.api.updateConfig({ lastUserId: user.id })
@@ -35,9 +36,26 @@ const App: React.FC = () => {
       // Start Watcher
       console.log('Starting Discord Watcher...')
       window.api.startWatcher(inputToken)
+      
+      // Load channels in background (don't block UI)
+      setIsVerifying(false)
+      setIsLoadingChannels(true)
+      
+      // Use setTimeout to allow UI to render first
+      setTimeout(async () => {
+        try {
+          const channels = await discordApi.getChannels(inputToken)
+          setChannels(channels)
+        } catch (err) {
+          console.error('Failed to load channels:', err)
+          setError('Failed to load channels')
+        } finally {
+          setIsLoadingChannels(false)
+        }
+      }, 100)
+      
     } catch (err: any) {
       setError(err.response?.status === 401 ? 'Invalid Discord Token' : 'Failed to connect to Discord')
-    } finally {
       setIsVerifying(false)
     }
   }
@@ -103,13 +121,31 @@ const App: React.FC = () => {
     if (view === 'settings') {
       return (
         <div className="flex-1 flex items-center justify-center">
-          <SettingsModal isOpen={true} onClose={() => setView('messages')} />
+          <React.Suspense fallback={
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="w-12 h-12 text-primary animate-spin" />
+              <p className="text-muted-foreground">Ayarlar yükleniyor...</p>
+            </div>
+          }>
+            <SettingsModal isOpen={true} onClose={() => setView('messages')} />
+          </React.Suspense>
         </div>
       )
     }
 
     if (view === 'userTracking') {
-      return <UserTrackingPanel />
+      return (
+        <React.Suspense fallback={
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="w-12 h-12 text-primary animate-spin" />
+              <p className="text-muted-foreground">Kullanıcı izleme paneli yükleniyor...</p>
+            </div>
+          </div>
+        }>
+          <UserTrackingPanel />
+        </React.Suspense>
+      )
     }
 
     // Default: messages view
@@ -152,7 +188,9 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-background overflow-hidden animate-in fade-in duration-500">
       <Sidebar />
       {renderMainContent()}
-      <DeletedMessagesModal />
+      <React.Suspense fallback={null}>
+        <DeletedMessagesModal />
+      </React.Suspense>
     </div>
   )
 }

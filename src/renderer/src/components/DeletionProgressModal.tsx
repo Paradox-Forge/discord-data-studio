@@ -34,6 +34,15 @@ const DeletionProgressModal: React.FC<DeletionProgressModalProps> = ({
   const [startTime, setStartTime] = useState<number>(0)
   const [elapsedTime, setElapsedTime] = useState<number>(0)
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number>(0)
+  const listRef = React.useRef<HTMLDivElement>(null)
+  
+  // Only show recent messages for performance (last 50)
+  const visibleMessages = React.useMemo(() => {
+    if (deletionStatuses.length <= 50) return deletionStatuses
+    const startIdx = Math.max(0, currentIndex - 25)
+    const endIdx = Math.min(deletionStatuses.length, currentIndex + 25)
+    return deletionStatuses.slice(startIdx, endIdx)
+  }, [deletionStatuses, currentIndex])
 
   useEffect(() => {
     if (isOpen && messages.length > 0) {
@@ -53,7 +62,7 @@ const DeletionProgressModal: React.FC<DeletionProgressModalProps> = ({
     }
   }, [isOpen, messages])
 
-  // Update elapsed time
+  // Update elapsed time with better performance
   useEffect(() => {
     if (!isDeleting) return
     
@@ -67,7 +76,7 @@ const DeletionProgressModal: React.FC<DeletionProgressModalProps> = ({
         const remaining = (messages.length - currentIndex) * avgTimePerMessage
         setEstimatedTimeRemaining(remaining)
       }
-    }, 100)
+    }, 500) // Update every 500ms instead of 100ms for better performance
 
     return () => clearInterval(interval)
   }, [isDeleting, startTime, currentIndex, messages.length])
@@ -84,6 +93,9 @@ const DeletionProgressModal: React.FC<DeletionProgressModalProps> = ({
         idx === i ? { ...s, status: 'deleting' as const } : s
       ))
       setCurrentIndex(i)
+
+      // Allow UI to update
+      await new Promise(resolve => setTimeout(resolve, 0))
 
       try {
         // Delete message
@@ -104,38 +116,50 @@ const DeletionProgressModal: React.FC<DeletionProgressModalProps> = ({
           ))
           deletedIds.push(status.messageId)
           
-          // Wait 350ms between deletions (faster rate)
+          // Wait 350ms between deletions (faster rate) - allow UI updates during wait
           await new Promise(resolve => setTimeout(resolve, 350))
         } else if (response.status === 429) {
           // Rate limited
-          const data = await response.json()
-          const retryAfter = (data.retry_after || 2) * 1000
+          let retryAfter = 2000
+          try {
+            const data = await response.json()
+            retryAfter = (data.retry_after || 2) * 1000
+          } catch {
+            // If parsing fails, use default
+          }
           
           setDeletionStatuses(prev => prev.map((s, idx) => 
             idx === i ? { ...s, status: 'pending' as const } : s
           ))
           
+          // Allow UI to update during wait
           await new Promise(resolve => setTimeout(resolve, retryAfter))
           
           // Retry
-          const retryResponse = await fetch(
-            `https://discord.com/api/v9/channels/${channelId}/messages/${status.messageId}`,
-            {
-              method: 'DELETE',
-              headers: {
-                Authorization: token
+          try {
+            const retryResponse = await fetch(
+              `https://discord.com/api/v9/channels/${channelId}/messages/${status.messageId}`,
+              {
+                method: 'DELETE',
+                headers: {
+                  Authorization: token
+                }
               }
+            )
+            
+            if (retryResponse.ok) {
+              setDeletionStatuses(prev => prev.map((s, idx) => 
+                idx === i ? { ...s, status: 'success' as const } : s
+              ))
+              deletedIds.push(status.messageId)
+            } else {
+              setDeletionStatuses(prev => prev.map((s, idx) => 
+                idx === i ? { ...s, status: 'error' as const, error: 'Rate limit retry failed' } : s
+              ))
             }
-          )
-          
-          if (retryResponse.ok) {
+          } catch (retryError: any) {
             setDeletionStatuses(prev => prev.map((s, idx) => 
-              idx === i ? { ...s, status: 'success' as const } : s
-            ))
-            deletedIds.push(status.messageId)
-          } else {
-            setDeletionStatuses(prev => prev.map((s, idx) => 
-              idx === i ? { ...s, status: 'error' as const, error: 'Rate limit retry failed' } : s
+              idx === i ? { ...s, status: 'error' as const, error: retryError.message } : s
             ))
           }
           
@@ -148,10 +172,16 @@ const DeletionProgressModal: React.FC<DeletionProgressModalProps> = ({
           await new Promise(resolve => setTimeout(resolve, 350))
         }
       } catch (error: any) {
+        console.error('Deletion error:', error)
         setDeletionStatuses(prev => prev.map((s, idx) => 
-          idx === i ? { ...s, status: 'error' as const, error: error.message } : s
+          idx === i ? { ...s, status: 'error' as const, error: error.message || 'Network error' } : s
         ))
         await new Promise(resolve => setTimeout(resolve, 350))
+      }
+
+      // Force UI update every 10 messages
+      if (i % 10 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0))
       }
     }
 
@@ -253,56 +283,72 @@ const DeletionProgressModal: React.FC<DeletionProgressModalProps> = ({
         </div>
 
         {/* Messages List */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar bg-gradient-to-b from-background/50 to-background">
-          {deletionStatuses.map((status, idx) => (
-            <div 
-              key={status.messageId}
-              className={`p-4 rounded-xl border transition-all duration-300 ${
-                status.status === 'success' 
-                  ? 'bg-green-500/5 border-green-500/30' 
-                  : status.status === 'error'
-                  ? 'bg-red-500/5 border-red-500/30'
-                  : status.status === 'deleting'
-                  ? 'bg-destructive/10 border-destructive/50 shadow-lg shadow-destructive/10 scale-105'
-                  : 'bg-secondary/20 border-border/50 opacity-60'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-bold text-sm truncate">{status.author}</span>
-                    {status.status === 'deleting' && (
-                      <span className="text-[9px] bg-destructive/20 text-destructive font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">
-                        Siliniyor
-                      </span>
+        <div 
+          ref={listRef}
+          className="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar bg-gradient-to-b from-background/50 to-background"
+        >
+          {currentIndex > 25 && (
+            <div className="text-center text-sm text-muted-foreground py-2 italic">
+              ... {currentIndex - 25} önceki mesaj gizlendi (performans için)
+            </div>
+          )}
+          {visibleMessages.map((status, idx) => {
+            const actualIdx = currentIndex > 25 ? currentIndex - 25 + idx : idx
+            return (
+              <div 
+                key={status.messageId}
+                className={`p-4 rounded-xl border transition-all duration-300 ${
+                  status.status === 'success' 
+                    ? 'bg-green-500/5 border-green-500/30' 
+                    : status.status === 'error'
+                    ? 'bg-red-500/5 border-red-500/30'
+                    : status.status === 'deleting'
+                    ? 'bg-destructive/10 border-destructive/50 shadow-lg shadow-destructive/10 scale-105'
+                    : 'bg-secondary/20 border-border/50 opacity-60'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-sm truncate">{status.author}</span>
+                      {status.status === 'deleting' && (
+                        <span className="text-[9px] bg-destructive/20 text-destructive font-black px-2 py-0.5 rounded-full uppercase tracking-widest animate-pulse">
+                          Siliniyor
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate leading-relaxed">
+                      {status.content || <span className="italic opacity-50">Boş mesaj</span>}
+                    </p>
+                    {status.error && (
+                      <p className="text-[10px] text-red-500 mt-1 font-semibold">
+                        Hata: {status.error}
+                      </p>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground truncate leading-relaxed">
-                    {status.content || <span className="italic opacity-50">Boş mesaj</span>}
-                  </p>
-                  {status.error && (
-                    <p className="text-[10px] text-red-500 mt-1 font-semibold">
-                      Hata: {status.error}
-                    </p>
-                  )}
-                </div>
-                <div className="flex-shrink-0">
-                  {status.status === 'success' && (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  )}
-                  {status.status === 'error' && (
-                    <AlertCircle className="w-5 h-5 text-red-500" />
-                  )}
-                  {status.status === 'deleting' && (
-                    <Loader2 className="w-5 h-5 text-destructive animate-spin" />
-                  )}
-                  {status.status === 'pending' && (
-                    <Clock className="w-5 h-5 text-muted-foreground opacity-30" />
-                  )}
+                  <div className="flex-shrink-0">
+                    {status.status === 'success' && (
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    )}
+                    {status.status === 'error' && (
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                    )}
+                    {status.status === 'deleting' && (
+                      <Loader2 className="w-5 h-5 text-destructive animate-spin" />
+                    )}
+                    {status.status === 'pending' && (
+                      <Clock className="w-5 h-5 text-muted-foreground opacity-30" />
+                    )}
+                  </div>
                 </div>
               </div>
+            )
+          })}
+          {deletionStatuses.length - currentIndex > 25 && (
+            <div className="text-center text-sm text-muted-foreground py-2 italic">
+              ... {deletionStatuses.length - currentIndex - 25} mesaj daha var
             </div>
-          ))}
+          )}
         </div>
 
         {/* Footer */}

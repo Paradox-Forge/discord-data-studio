@@ -9,6 +9,7 @@ const Sidebar: React.FC = () => {
   const [manualId, setManualId] = useState('')
   const [targetUserId, setTargetUserId] = useState('')
   const [isAdding, setIsAdding] = useState(false)
+  const isLoadingChannels = channels.length === 0 && token
 
   const handleAddManual = async () => {
     if (!manualId && !targetUserId) return
@@ -161,9 +162,23 @@ const Sidebar: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {filteredChannels.length === 0 ? (
+        {isLoadingChannels ? (
+          <div className="p-8 text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground animate-pulse">
+                Kanallar yükleniyor...
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Bu birkaç saniye sürebilir
+              </p>
+            </div>
+          </div>
+        ) : filteredChannels.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground text-sm">
-            No conversations found
+            {channels.length === 0 ? 'No conversations available' : 'No conversations found'}
           </div>
         ) : (
           <div className="p-2 space-y-1">
