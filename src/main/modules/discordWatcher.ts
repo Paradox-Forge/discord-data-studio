@@ -1,6 +1,7 @@
 import { app, dialog } from 'electron'
 import WebSocket from 'ws'
 import fs from 'fs'
+import fsp from 'fs/promises'
 import path from 'path'
 import axios from 'axios'
 import log from 'electron-log'
@@ -26,6 +27,8 @@ export class DiscordWatcher {
   private archivesPath: string
   private lastSyncTimes: Map<string, number> = new Map() // Cooldown tracking
   private isRateLimited: boolean = false
+  private messageQueue: Map<string, DiscordMessage[]> = new Map() // Batch queue
+  private flushInterval: NodeJS.Timeout | null = null
 
   constructor() {
     this.archivesPath = path.join(app.getPath('userData'), 'archives')
@@ -33,12 +36,78 @@ export class DiscordWatcher {
       fs.mkdirSync(this.archivesPath, { recursive: true })
     }
     log.info('DiscordWatcher initialized at:', this.archivesPath)
+    
+    // Flush queue every 5 seconds instead of every message
+    this.flushInterval = setInterval(() => {
+      this.flushMessageQueue()
+    }, 5000)
   }
 
   // Small helper for random human-like delay
   private async jitterSleep(): Promise<void> {
     const delay = Math.floor(Math.random() * 600) + 400 // 400ms - 1000ms delay
     return new Promise(resolve => setTimeout(resolve, delay))
+  }
+
+  public stop(): void {
+    if (this.ws) {
+      this.ws.close()
+      this.ws = null
+    }
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval)
+      this.flushInterval = null
+    }
+    // Flush any remaining messages before stopping
+    this.flushMessageQueue()
+    log.info('DiscordWatcher stopped')
+  }
+
+  // Batch write messages to reduce I/O operations
+  private async flushMessageQueue(): Promise<void> {
+    if (this.messageQueue.size === 0) return
+
+    const flushPromises: Promise<void>[] = []
+
+    for (const [channelId, messages] of this.messageQueue.entries()) {
+      if (messages.length === 0) continue
+
+      const flushTask = (async () => {
+        try {
+          const userId = configManager.getConfig().lastUserId || 'unknown'
+          const logPath = this.getLogPath(userId, channelId)
+          
+          // Read existing logs
+          let logs: DiscordMessage[] = []
+          if (fs.existsSync(logPath)) {
+            try {
+              const content = await fsp.readFile(logPath, 'utf-8')
+              logs = JSON.parse(content)
+            } catch (e) {
+              log.error('Failed to read existing logs:', e)
+              logs = []
+            }
+          }
+
+          // Add new messages
+          logs.push(...messages)
+
+          // Write async (non-blocking)
+          await fsp.writeFile(logPath, JSON.stringify(logs, null, 2))
+          log.info(`Flushed ${messages.length} messages for channel ${channelId}`)
+        } catch (err) {
+          log.error(`Failed to flush messages for channel ${channelId}:`, err)
+        }
+      })()
+
+      flushPromises.push(flushTask)
+    }
+
+    // Wait for all flush operations to complete
+    await Promise.all(flushPromises)
+
+    // Clear queue after flushing
+    this.messageQueue.clear()
   }
 
   public start(token: string): void {
@@ -80,10 +149,15 @@ export class DiscordWatcher {
       const liveMessages: any[] = response.data
       const liveIds = new Set(liveMessages.map(m => m.id))
 
-      // 2. Load local logs
+      // 2. Load local logs - async
       let localLogs: DiscordMessage[] = []
       if (fs.existsSync(logPath)) {
-        localLogs = JSON.parse(fs.readFileSync(logPath, 'utf-8'))
+        try {
+          const content = await fsp.readFile(logPath, 'utf-8')
+          localLogs = JSON.parse(content)
+        } catch (e) {
+          localLogs = []
+        }
       }
 
       // 3. COMPARE: If it's in local but NOT in live, it was deleted
@@ -111,15 +185,18 @@ export class DiscordWatcher {
           if (!localLogs.find(m => m.id === liveMsg.id)) {
             localLogs.push(liveMsg)
             changed = true
-            // PROACTIVE: Download attachments for newly discovered messages
+            // PROACTIVE: Download attachments for newly discovered messages (async)
             if (liveMsg.attachments && liveMsg.attachments.length > 0) {
-              this.downloadAttachments(liveMsg)
+              setImmediate(() => {
+                this.downloadAttachments(liveMsg)
+              })
             }
           }
         }
 
         if (changed) {
-          fs.writeFileSync(logPath, JSON.stringify(localLogs, null, 2))
+          // Async write - non-blocking
+          await fsp.writeFile(logPath, JSON.stringify(localLogs, null, 2))
           log.info(`Channel ${channelId} synced and updated via Detective Mode.`)
         }
       }
@@ -217,67 +294,86 @@ export class DiscordWatcher {
     const config = configManager.getConfig()
     if (!config.trackDeletedMessages) return // Skip if tracking is disabled
     
-    const userId = config.lastUserId || 'unknown'
-    const logPath = this.getLogPath(userId, msg.channel_id)
-    
-    let logs: DiscordMessage[] = []
-    if (fs.existsSync(logPath)) {
-      try {
-        logs = JSON.parse(fs.readFileSync(logPath, 'utf-8'))
-      } catch (e) { logs = [] }
+    // Add to queue instead of writing immediately
+    const channelId = msg.channel_id
+    if (!this.messageQueue.has(channelId)) {
+      this.messageQueue.set(channelId, [])
     }
+    this.messageQueue.get(channelId)!.push(msg)
 
-    logs.push(msg)
-    fs.writeFileSync(logPath, JSON.stringify(logs, null, 2))
-
+    // Download attachments in background (non-blocking)
     if (msg.attachments && msg.attachments.length > 0) {
-      this.downloadAttachments(msg)
+      setImmediate(() => {
+        this.downloadAttachments(msg)
+      })
     }
   }
 
-  private handleMessageDelete(data: { id: string, channel_id: string }): void {
+  private async handleMessageDelete(data: { id: string, channel_id: string }): Promise<void> {
     const config = configManager.getConfig()
     if (!config.trackDeletedMessages) return // Skip if tracking is disabled
     
-    const userId = config.lastUserId || 'unknown'
-    const channelDir = path.join(this.archivesPath, userId, data.channel_id)
-    
-    if (!fs.existsSync(channelDir)) return
+    // Use setImmediate to not block the main thread
+    setImmediate(async () => {
+      const userId = config.lastUserId || 'unknown'
+      const channelDir = path.join(this.archivesPath, userId, data.channel_id)
+      
+      if (!fs.existsSync(channelDir)) return
 
-    const files = fs.readdirSync(channelDir).filter(f => f.endsWith('.json'))
-    for (const file of files) {
-      const fullPath = path.join(channelDir, file)
-      if (this.markAsDeleted(fullPath, data.id)) break
-    }
+      try {
+        const files = await fsp.readdir(channelDir)
+        const jsonFiles = files.filter(f => f.endsWith('.json'))
+        
+        for (const file of jsonFiles) {
+          const fullPath = path.join(channelDir, file)
+          const marked = await this.markAsDeleted(fullPath, data.id)
+          if (marked) break
+        }
+      } catch (err) {
+        log.error('Error handling message delete:', err)
+      }
+    })
   }
 
-  private markAsDeleted(filePath: string, messageId: string): boolean {
+  private async markAsDeleted(filePath: string, messageId: string): Promise<boolean> {
     try {
-      const logs: DiscordMessage[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      const content = await fsp.readFile(filePath, 'utf-8')
+      const logs: DiscordMessage[] = JSON.parse(content)
       const msgIndex = logs.findIndex(m => m.id === messageId)
+      
       if (msgIndex !== -1) {
         logs[msgIndex].deleted = true
-        fs.writeFileSync(filePath, JSON.stringify(logs, null, 2))
+        await fsp.writeFile(filePath, JSON.stringify(logs, null, 2))
         log.info(`Success: Message ${messageId} marked as deleted in ${filePath}`)
         return true
       }
-    } catch (e) { return false }
+    } catch (e) { 
+      log.error('Error marking message as deleted:', e)
+      return false 
+    }
     return false
   }
 
-  private handleMessageUpdate(msg: DiscordMessage): void {
-    const userId = configManager.getConfig().lastUserId || 'unknown'
-    const logPath = this.getLogPath(userId, msg.channel_id)
-    if (fs.existsSync(logPath)) {
-      try {
-        const logs: DiscordMessage[] = JSON.parse(fs.readFileSync(logPath, 'utf-8'))
-        const msgIndex = logs.findIndex(m => m.id === msg.id)
-        if (msgIndex !== -1) {
-          logs[msgIndex] = { ...logs[msgIndex], ...msg, updated: true }
-          fs.writeFileSync(logPath, JSON.stringify(logs, null, 2))
+  private async handleMessageUpdate(msg: DiscordMessage): Promise<void> {
+    setImmediate(async () => {
+      const userId = configManager.getConfig().lastUserId || 'unknown'
+      const logPath = this.getLogPath(userId, msg.channel_id)
+      
+      if (fs.existsSync(logPath)) {
+        try {
+          const content = await fsp.readFile(logPath, 'utf-8')
+          const logs: DiscordMessage[] = JSON.parse(content)
+          const msgIndex = logs.findIndex(m => m.id === msg.id)
+          
+          if (msgIndex !== -1) {
+            logs[msgIndex] = { ...logs[msgIndex], ...msg, updated: true }
+            await fsp.writeFile(logPath, JSON.stringify(logs, null, 2))
+          }
+        } catch (e) {
+          log.error('Error handling message update:', e)
         }
-      } catch (e) { }
-    }
+      }
+    })
   }
 
   private async downloadAttachments(msg: DiscordMessage): Promise<void> {
