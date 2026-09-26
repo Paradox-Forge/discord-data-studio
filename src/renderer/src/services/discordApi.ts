@@ -100,18 +100,23 @@ export const bulkDeleteMessages = async (
       await discordApi.deleteMessage(token, channelId, id)
       count++
       onProgress(count)
-      // Discord rate limit for deletion is roughly 1-2 per second for user tokens
-      await sleep(1500) 
+      // Hızlandırılmış silme: 500ms bekleme (Discord rate limit'e göre ayarlandı)
+      await sleep(500) 
     } catch (error: any) {
       if (error.response?.status === 429) {
         const retryAfter = error.response.data.retry_after * 1000 || 5000
         await sleep(retryAfter)
         // Retry once
-        await discordApi.deleteMessage(token, channelId, id)
-        count++
-        onProgress(count)
+        try {
+          await discordApi.deleteMessage(token, channelId, id)
+          count++
+          onProgress(count)
+        } catch (retryError) {
+          console.error(`Failed to delete message ${id} after retry`, retryError)
+        }
       } else {
         console.error(`Failed to delete message ${id}`, error)
+        // Continue with next message even if one fails
       }
     }
   }

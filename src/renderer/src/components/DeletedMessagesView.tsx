@@ -18,7 +18,10 @@ interface DeletedMessage {
 
 const DeletedMessagesView: React.FC = () => {
   const [messages, setMessages] = useState<DeletedMessage[]>([])
+  const [allMessages, setAllMessages] = useState<DeletedMessage[]>([])
+  const [displayedCount, setDisplayedCount] = useState(50)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   const loadDeletedMessages = async () => {
     setLoading(true)
@@ -28,7 +31,10 @@ const DeletedMessagesView: React.FC = () => {
       const deleted = allLogs
         .filter((msg: any) => msg.deleted)
         .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      setMessages(deleted)
+      
+      setAllMessages(deleted)
+      setMessages(deleted.slice(0, 50)) // İlk 50 mesajı göster
+      setDisplayedCount(50)
     } catch (err) {
       console.error('Failed to load deleted messages:', err)
     } finally {
@@ -39,6 +45,24 @@ const DeletedMessagesView: React.FC = () => {
   useEffect(() => {
     loadDeletedMessages()
   }, [])
+
+  // Scroll event handler for infinite scroll
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const element = e.currentTarget
+    const scrollPosition = element.scrollTop + element.clientHeight
+    const threshold = element.scrollHeight - 200 // 200px before bottom
+
+    if (scrollPosition >= threshold && !loadingMore && displayedCount < allMessages.length) {
+      setLoadingMore(true)
+      
+      // Load next 50 messages
+      setTimeout(() => {
+        setMessages(allMessages.slice(0, displayedCount + 50))
+        setDisplayedCount(displayedCount + 50)
+        setLoadingMore(false)
+      }, 300)
+    }
+  }
 
   if (loading) {
     return (
@@ -52,7 +76,7 @@ const DeletedMessagesView: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-background/50">
+    <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-background/50" onScroll={handleScroll}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
@@ -121,6 +145,26 @@ const DeletedMessagesView: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      
+      {/* Loading more indicator */}
+      {loadingMore && (
+        <div className="flex justify-center py-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <span>Daha fazla mesaj yükleniyor...</span>
+          </div>
+        </div>
+      )}
+      
+      {/* Show count info */}
+      {!loading && messages.length > 0 && (
+        <div className="text-center py-4 text-sm text-muted-foreground">
+          Gösterilen: {messages.length} / {allMessages.length} mesaj
+          {displayedCount < allMessages.length && (
+            <span className="ml-2 text-primary">• Daha fazla için aşağı kaydırın</span>
+          )}
         </div>
       )}
     </div>

@@ -28,8 +28,12 @@ interface ChannelInfo {
 const DeletedMessagesModal: React.FC = () => {
   const { isDeletedModalOpen, setDeletedModalOpen, channels, token } = useStore()
   const [messages, setMessages] = useState<DeletedMessage[]>([])
+  const [allMessages, setAllMessages] = useState<DeletedMessage[]>([])
+  const [displayedCount, setDisplayedCount] = useState(50)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [channelInfoCache, setChannelInfoCache] = useState<Map<string, ChannelInfo>>(new Map())
+  const listRef = React.useRef<HTMLDivElement>(null)
 
   const loadDeletedMessages = async () => {
     setLoading(true)
@@ -38,10 +42,14 @@ const DeletedMessagesModal: React.FC = () => {
       const deleted = allLogs
         .filter((msg: any) => msg.deleted)
         .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      setMessages(deleted)
       
-      // Load channel info for all unique channel IDs
-      const uniqueChannelIds = [...new Set(deleted.map((msg: any) => msg.channel_id))]
+      setAllMessages(deleted)
+      setMessages(deleted.slice(0, 50)) // İlk 50 mesajı göster
+      setDisplayedCount(50)
+      
+      // Load channel info for first batch
+      const firstBatch = deleted.slice(0, 50)
+      const uniqueChannelIds = [...new Set(firstBatch.map((msg: any) => msg.channel_id))]
       await loadChannelInfo(uniqueChannelIds)
     } catch (err) {
       console.error('Failed to load deleted messages:', err)
@@ -198,6 +206,28 @@ const DeletedMessagesModal: React.FC = () => {
     }
   }, [isDeletedModalOpen])
 
+  // Scroll event handler for infinite scroll
+  const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
+    const element = e.currentTarget
+    const scrollPosition = element.scrollTop + element.clientHeight
+    const threshold = element.scrollHeight - 200 // 200px before bottom
+
+    if (scrollPosition >= threshold && !loadingMore && displayedCount < allMessages.length) {
+      setLoadingMore(true)
+      
+      // Load next 50 messages
+      const nextBatch = allMessages.slice(displayedCount, displayedCount + 50)
+      const uniqueChannelIds = [...new Set(nextBatch.map((msg: any) => msg.channel_id))]
+      
+      // Load channel info for new batch
+      await loadChannelInfo(uniqueChannelIds)
+      
+      setMessages(allMessages.slice(0, displayedCount + 50))
+      setDisplayedCount(displayedCount + 50)
+      setLoadingMore(false)
+    }
+  }
+
   if (!isDeletedModalOpen) return null
 
   return (
@@ -231,7 +261,11 @@ const DeletedMessagesModal: React.FC = () => {
         </header>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+        <div 
+          ref={listRef}
+          className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar"
+          onScroll={handleScroll}
+        >
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-4">
               <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -339,6 +373,26 @@ const DeletedMessagesModal: React.FC = () => {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+          
+          {/* Loading more indicator */}
+          {loadingMore && (
+            <div className="flex justify-center py-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                <span>Daha fazla mesaj yükleniyor...</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Show count info */}
+          {!loading && messages.length > 0 && (
+            <div className="text-center py-4 text-sm text-muted-foreground">
+              Gösterilen: {messages.length} / {allMessages.length} mesaj
+              {displayedCount < allMessages.length && (
+                <span className="ml-2 text-primary">• Daha fazla için aşağı kaydırın</span>
+              )}
             </div>
           )}
         </div>

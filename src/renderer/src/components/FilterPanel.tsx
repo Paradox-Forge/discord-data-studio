@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore'
 import { Filter, Download, Trash2, FileJson, CheckCircle2, AlertCircle, FolderOpen, Search, X } from 'lucide-react'
 import { cn, formatDate } from '../lib/utils'
 import { bulkDeleteMessages, fetchAllMessages } from '../services/discordApi'
+import DeletionProgressModal from './DeletionProgressModal'
 
 declare global {
   interface Window {
@@ -27,6 +28,10 @@ const FilterPanel: React.FC = () => {
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'paused' | 'stopped'>('idle')
   const [lastScanId, setLastScanId] = useState<string | undefined>(undefined)
   const [stopRequest, setStopRequest] = useState(false)
+  
+  // Deletion modal states
+  const [showDeletionModal, setShowDeletionModal] = useState(false)
+  const [messagesToDelete, setMessagesToDelete] = useState<any[]>([])
 
   const filteredMessages = useMemo(() => {
     return messages.filter(msg => {
@@ -167,24 +172,15 @@ const FilterPanel: React.FC = () => {
     const confirmed = confirm(`Found ${ownMessages.length} of your messages. Are you sure you want to delete ${targets.length} of them?`)
     if (!confirmed) return
 
-    setIsProcessing(true)
-    setProgress(0)
-    try {
-      await bulkDeleteMessages(token, selectedChannelId, targets.map(m => m.id), (count) => {
-        setProgress(Math.round((count / targets.length) * 100))
-      })
-      
-      // Update local state by removing deleted messages
-      const deletedIds = new Set(targets.map(m => m.id))
-      setMessages(messages.filter(m => !deletedIds.has(m.id)))
-      
-      alert(`Successfully deleted ${targets.length} messages!`)
-    } catch (err) {
-      alert('An error occurred during deletion. Check DevTools for details.')
-    } finally {
-      setIsProcessing(false)
-      setProgress(0)
-    }
+    // Show deletion modal instead of inline progress
+    setMessagesToDelete(targets)
+    setShowDeletionModal(true)
+  }
+
+  const handleDeletionComplete = (deletedIds: string[]) => {
+    // Update local state by removing deleted messages
+    const deletedIdsSet = new Set(deletedIds)
+    setMessages(messages.filter(m => !deletedIdsSet.has(m.id)))
   }
 
   return (
@@ -303,10 +299,10 @@ const FilterPanel: React.FC = () => {
             <button
               onClick={handleDelete}
               disabled={isProcessing}
-              className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-destructive/10 hover:bg-destructive text-destructive hover:text-destructive-foreground border border-destructive/20 rounded-md text-sm font-medium transition-all"
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-destructive/10 hover:bg-destructive text-destructive hover:text-destructive-foreground border border-destructive/20 rounded-md text-sm font-medium transition-all disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" />
-              {isProcessing ? `Deleting... ${progress}%` : 'Delete Messages'}
+              Delete Messages
             </button>
           </div>
         </div>
@@ -524,6 +520,19 @@ const FilterPanel: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Deletion Progress Modal */}
+      <DeletionProgressModal
+        isOpen={showDeletionModal}
+        messages={messagesToDelete}
+        onClose={() => {
+          setShowDeletionModal(false)
+          setMessagesToDelete([])
+        }}
+        onComplete={handleDeletionComplete}
+        token={token || ''}
+        channelId={selectedChannelId || ''}
+      />
     </aside>
   )
 }
